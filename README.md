@@ -29,6 +29,8 @@ deadlocks-handling-c/
         └── dataset_150_processes.csv  # Full 150-process benchmark dataset
 ```
 
+The Python script `visualize.py` in `src/` is a supplemental tool to generate visualizations from the CSV results produced by the C simulator. It's not a part of the main program and do not affect the results, we just use it to generate some visualizations for reports because of the convenience of available Python plotting libraries, we can replace it by any visualization modules. 
+
 ---
 
 ## Requirements
