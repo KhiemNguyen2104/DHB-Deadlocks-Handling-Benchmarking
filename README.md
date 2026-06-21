@@ -1,15 +1,6 @@
-# Deadlock Handling Simulator — C Implementation
+# Deadlock Handling Simulator
 
-A pure C99 port of the Python deadlock-handling simulator. The C core runs the full grid benchmark and writes results to CSV files. A supplemental Python script visualizes those results independently.
-
----
-
-## Requirements
-
-- `gcc` with C99 support
-- `make`
-
-For the visualization tool only: Python 3.8+, `pandas`, `matplotlib`, `seaborn`
+A discrete-event simulator for benchmarking three deadlock handling strategies — **Kill**, **Retry**, and **Rollback** — under the timeout detection mechanism. The simulator includes a hidden WFG Oracle to classify each timeout event as a true deadlock or a false positive, enabling fair, quantitative comparison across strategies.
 
 ---
 
@@ -17,107 +8,132 @@ For the visualization tool only: Python 3.8+, `pandas`, `matplotlib`, `seaborn`
 
 ```
 deadlocks-handling-c/
-├── Makefile
-├── run.sh
-├── README.md
-├── results/          CSV outputs (auto-created at runtime)
-├── figures/          PNG outputs (auto-created by visualize.py)
+├── Makefile                        # Build and run commands
+├── run.sh                          # Alternative bash entry point
+├── README.md                       # This file
+├── results/                        # Generated CSVs (auto-created)
+├── figures/                        # Generated PNG charts (auto-created)
 └── src/
-    ├── main.c
-    ├── models.h / models.c
-    ├── dataset.h / dataset.c
-    ├── metrics.h / metrics.c
-    ├── oracle.h / oracle.c
-    ├── strategies.h / strategies.c
-    ├── simulator.h / simulator.c
-    ├── kill.c
-    ├── retry.c
-    ├── rollback.c
-    ├── benchmark.h / benchmark.c
-    ├── visualize.py
+    ├── main.c                      # Entry point — configure parameters here
+    ├── simulator.c                 # Discrete-event simulator core
+    ├── benchmark.c                 # Grid-search benchmark runner
+    ├── metrics.c                   # MetricsCollector
+    ├── oracle.c                    # WFG builder + DFS cycle detector
+    ├── dataset.c                   # CSV event loader
+    ├── kill.c                      # Kill strategy
+    ├── retry.c                     # Retry with exponential backoff
+    ├── rollback.c                  # Checkpoint-based rollback
+    ├── visualize.py                # Supplemental Python script for plots
     └── data/
-        ├── dataset_150_processes.csv
-        └── scenario.csv
+        ├── scenario.csv            # Minimal circular deadlock scenario
+        └── dataset_150_processes.csv  # Full 150-process benchmark dataset
 ```
 
 ---
 
-## C Core
+## Requirements
 
-### Build
+To run the core simulator:
 
-```bash
-make
-```
+- `gcc` (with C99 support)
+- `make`
 
-### Run
+To generate plots and visualizations:
 
-```bash
-./deadlock_sim
-```
+- Python 3.8+
+- `pandas`, `matplotlib`, `seaborn`
 
-The binary must be executed from the project root so that relative paths to `src/data/` and `results/` resolve correctly.
-
-### Clean
-
-```bash
-make clean
-```
-
-### Output
-
-After running, `results/` contains:
-
-| File | Description |
-|---|---|
-| `grid_results.csv` | All 120 benchmark runs |
-| `results_maxticks800.csv` | Snapshot at MAX\_TICKS = 800 |
-
----
-
-## Python Visualization Tool
-
-> **Note:** The visualization script is a supplemental tool only. It is not part of the C implementation and is not required to run the simulator.
-
-### Requirements
+Install Python dependencies:
 
 ```bash
 pip install pandas matplotlib seaborn
 ```
 
-### Run
-
-```bash
-python3 src/visualize.py
-```
-
-The script reads `results/grid_results.csv` and saves plots to `figures/`.
-
 ---
 
-## Run Everything
+## How to Run
 
 You have two independent options to build the C binary, run the simulation, and generate the visualizations. Both options handle the entire pipeline end-to-end.
 
-**Option 1: Using Make**
+### Option 1 — Using Make
+
 ```bash
 make run
 ```
 
-**Option 2: Using Bash Script**
+### Option 2 — Using Bash Script
+
 ```bash
 bash run.sh
+```
+
+### Clean output files
+
+```bash
+make clean
 ```
 
 ---
 
 ## Configuration
 
-Edit `src/main.c` to change:
+All experiment parameters are set in the `src/main.c` entry point:
 
-| Constant | Default | Description |
-|---|---|---|
-| `DATA_PATH` | `src/data/dataset_150_processes.csv` | Input dataset |
-| `RETRY_ATTEMPTS` | `5` | Max retries before kill |
-| `timeouts[]` | `{2,5,10,20,30,40,50,100}` | Timeout thresholds |
-| `max_ticks_list[]` | `{50,100,200,400,800}` | Simulation time limits |
+| Parameter          | Default                              | Description                                |
+| ------------------ | ------------------------------------ | ------------------------------------------ |
+| `DATA_PATH`        | `src/data/dataset_150_processes.csv` | Input event dataset                        |
+| `timeouts[]`       | `{2, 5, 10, 20, 30, 40, 50, 100}`    | Timeout thresholds to sweep                |
+| `max_ticks_list[]` | `{50, 100, 200, 400, 800}`           | Simulation time limits to sweep            |
+| `RETRY_ATTEMPTS`   | `5`                                  | Maximum retries before a process is killed |
+
+---
+
+## Input Format
+
+Event CSV files must have these columns:
+
+```
+time, process_id, action, resource_id, duration
+```
+
+- **`time`** — logical clock tick when the event fires
+- **`process_id`** — process identifier (e.g. `P1`)
+- **`action`** — always `request`
+- **`resource_id`** — resource identifier (e.g. `R1`)
+- **`duration`** — how many ticks the process holds the resource after acquiring it (`0` = 1 tick minimum)
+
+---
+
+## Strategies
+
+### Kill
+
+When a timeout fires, the process is immediately terminated and all held resources are released. Simple and fast to break deadlocks, but prone to false-positive kills.
+
+### Retry (Exponential Backoff)
+
+When a timeout fires, the process releases all resources and enters a backoff sleep for `min(3 × 2^(k−1), 16)` ticks, where `k` is the retry count, then restarts from its first resource request. After `RETRY_ATTEMPTS` retries the process is killed.
+
+### Rollback (Checkpoint)
+
+When a timeout fires, the process is restored to its checkpoint state — the moment it first successfully acquired a resource. Only resources acquired _after_ the checkpoint are released. The execution timer is also restored. After `RETRY_ATTEMPTS` rollbacks the process is killed.
+
+---
+
+## Output
+
+After a run, the generated results are saved into the `results/` and `figures/` directories:
+
+| File                              | Description                                           |
+| --------------------------------- | ----------------------------------------------------- |
+| `heatmap_throughput.png`          | 3-panel heatmap: throughput (%) × timeout × MAX_TICKS |
+| `throughput_vs_maxticks_t10.png`  | Line chart at TIMEOUT = 10                            |
+| `throughput_vs_maxticks_t50.png`  | Line chart at TIMEOUT = 50                            |
+| `throughput_vs_maxticks_t100.png` | Line chart at TIMEOUT = 100                           |
+| `accuracy_kill.png`               | Resolved vs FP count for KILL                         |
+| `accuracy_retry.png`              | Resolved vs FP count for RETRY                        |
+| `accuracy_rollback.png`           | Resolved vs FP count for ROLLBACK                     |
+| `accuracy_profile.png`            | FP Rate (%) vs timeout, all strategies                |
+| `throughput_over_timeouts.png`    | Throughput (%) vs timeout, all strategies             |
+| `grid_results.csv`                | Full 120-run result table                             |
+| `results_maxticks800.csv`         | Snapshot at MAX_TICKS = 800                           |
