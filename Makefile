@@ -14,7 +14,7 @@ $(TARGET): $(SRCS)
 
 run: $(TARGET)
 	./$(TARGET)
-	python3 src/visualize.py
+# 	python3 src/visualize.py
 
 clean:
 	rm -f $(TARGET)

@@ -55,7 +55,7 @@ pip install pandas matplotlib seaborn
 
 ## How to Run
 
-You have two independent options to build the C binary, run the simulation, and generate the visualizations. Both options handle the entire pipeline end-to-end.
+You have two independent options to build the C binary, run the simulation, and generate the visualizations. Both options handle the entire pipeline end-to-end. Firstly, you need to `cd` to the root directory of this project.
 
 ### Option 1 — Using Make
 
@@ -74,6 +74,20 @@ bash run.sh
 ```bash
 make clean
 ```
+
+After running, the CSV files storing detailed results are generated in the `results/` directory.
+
+### Visualization
+
+You can run the visualization module independently after running the simulation. Just make sure you have Python 3.8+ and the required Python libraries installed.
+
+```bash
+python src/visualize.py
+```
+
+The visualization module will automatically look for CSV files in the `results/` directory and generate plots in the `figures/` directory.
+
+Or, you can un-comment the script in `run.sh` and Makefile to run it automatically.
 
 ---
 

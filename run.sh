@@ -6,4 +6,4 @@ gcc -std=c99 -Wall -Wextra -Isrc -o deadlock_sim \
     src/simulator.c src/strategies.c src/kill.c src/retry.c src/rollback.c \
     src/benchmark.c -lm
 ./deadlock_sim
-python3 src/visualize.py
+# python3 src/visualize.py
